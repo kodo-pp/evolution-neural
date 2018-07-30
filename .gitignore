@@ -1,0 +1,4 @@
+*.o
+main
+core.dmp
+.build-cache
