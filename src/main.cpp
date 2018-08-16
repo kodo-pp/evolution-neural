@@ -3,7 +3,7 @@
 using namespace std;
 
 const double MUTATION_PROBABILITY = 1;
-const int DEFAULT_NEURONS_COUNT = 100;
+const int DEFAULT_NEURONS_COUNT = 50;
 
 const int FIELD_WIDTH = 200;
 const int FIELD_HEIGHT = 50;
@@ -15,9 +15,9 @@ const double ENERGY_EAT = 0.7;
 const double EGAIN_PRIORITY = 1.1;
 const double ENERGY_TO_FORK = 200.0;
 const double ENERGY_LOSS_PER_NEIGH = 0.3;
-const double ENERGY_POPULATION_PENALTY = 0; // 1.0 / 300.0;
-const double RADIATION_AT_TOP = 0.2 * 10;
-const double RADIATION_AT_BOTTOM = 0.8 * 10;
+const double ENERGY_POPULATION_PENALTY = 1.0 / 300.0;
+const double RADIATION_AT_TOP = 0.2;
+const double RADIATION_AT_BOTTOM = 0.8;
 const double FOODGRAD_TOP = 0.55;
 const double FOODGRAD_BOTTOM = 1.0;
 const double FOOD_ENERGY_EARN = 1.6;
@@ -94,13 +94,15 @@ double get_energy([[maybe_unused]] int x, int y, int epoch)
     double k = static_cast<double>(y) / FIELD_HEIGHT;
     k = (k - FOODGRAD_TOP) / (FOODGRAD_BOTTOM - FOODGRAD_TOP);
     double food_energy = max(0.0, k * FOOD_ENERGY_EARN);
-    // if (eats.at(y).at(x) >= food_avail) {
-    //     // Everything is already eaten :(
-    //     food_energy = 0;
-    // } else {
-    // Yum-yum-yum!!!
-    //     ++eats.at(y).at(x);
-    // }
+    /*
+    if (eats[y][x] >= food_avail) {
+        // Everything is already eaten :(
+        food_energy = 0;
+    } else {
+        // Yum-yum-yum!!!
+        ++eats[y][x];
+    }
+    */
     return sun_energy + food_energy;
 }
 
@@ -165,12 +167,12 @@ public:
         for (int i = n - 1; i >= 0; --i) {
             double sum = 0, wsum = 0;
             for (int j = 0; j < n; ++j) {
-                sum += data.at(j) * connections.at(i).at(j);
-                wsum += connections.at(i).at(j);
+                sum += data[j] * connections[i][j];
+                wsum += connections[i][j];
             }
             sum /= wsum;
-            double q = memory_strength.at(i);
-            data.at(i) = data.at(i) * q + sum * (1 - q);
+            double q = memory_strength[i];
+            data[i] = data[i] * q + sum * (1 - q);
         }
         return data;
     }
@@ -308,7 +310,7 @@ public:
     void move(int dx, int dy)
     {
         energy -= ENERGY_PER_MOVE;
-        int nx = clamp(x + dx, 0, FIELD_WIDTH - 1);
+        int nx = (x + dx + FIELD_WIDTH) % FIELD_WIDTH;
         int ny = clamp(y + dy, 0, FIELD_HEIGHT - 1);
         if (move_mob(x, y, nx, ny)) {
             x = nx;
@@ -319,7 +321,7 @@ public:
     void attack(int dx, int dy)
     {
         energy -= ENERGY_PER_ATTACK;
-        int nx = clamp(x + dx, 0, FIELD_WIDTH - 1);
+        int nx = (x + dx + FIELD_WIDTH) % FIELD_WIDTH;
         int ny = clamp(y + dy, 0, FIELD_HEIGHT - 1);
         if (has_mob_at(nx, ny)) {
             energy += attack_mob_at(*this, nx, ny);
@@ -352,7 +354,24 @@ public:
     Brain brain;
 };
 
-map<pair<int, int>, Mob> field;
+namespace std
+{
+    template <>
+    struct hash<pair <int, int>>
+    {
+        size_t operator()(const pair <int, int>& k) const
+        {
+            // Compute individual hash values for first, second and third
+            // http://stackoverflow.com/a/1646913/126995
+            size_t res = 17;
+            res = res * 31 + hash<int>()(k.first);
+            res = res * 31 + hash<int>()(k.second);
+            return res;
+        }
+    };
+}
+
+unordered_map<pair<int, int>, Mob> field;
 
 bool has_mob_at(int x, int y)
 {
@@ -360,7 +379,7 @@ bool has_mob_at(int x, int y)
 }
 double attack_mob_at(const Mob& attacker, int x, int y)
 {
-    assert(has_mob_at(x, y));
+    //assert(has_mob_at(x, y));
     Mob& victim = field.at({ x, y });
     double max_eat = attacker.energy * ENERGY_EAT;
     if (victim.energy < max_eat) {
@@ -380,7 +399,7 @@ bool move_mob(int ox, int oy, int nx, int ny)
 {
     // cerr << "move_mob" << ox << ", " << oy << ", " << nx << ", " << ny << endl;
     // abort();
-    assert(has_mob_at(ox, oy));
+    //assert(has_mob_at(ox, oy));
     if (has_mob_at(nx, ny)) {
         return false;
     }
@@ -413,7 +432,7 @@ string sun_strength_str(int epoch)
     return s;
 }
 
-void print_field(int epoch)
+void print_field(int epoch, int count = -1)
 {
     cout << "\x1b[0m\x1b[0;0H";
     cout << "Epoch: " << epoch << ", population = " << cnt
@@ -462,10 +481,20 @@ int main()
     root.y = FIELD_HEIGHT / 2;
     field.insert({ { FIELD_WIDTH / 2, FIELD_HEIGHT / 2 }, root });
 
+    const int fps = 15;
+    auto prev = std::chrono::high_resolution_clock::now();
+
     int epoch = 0;
     while (true) {
         _g_epoch = epoch;
-        print_field(epoch);
+        if ((epoch & 0xF) == 0) {
+            auto now = std::chrono::high_resolution_clock::now();
+            double dur = std::chrono::duration <double>(now - prev).count();
+            if (dur >= 1.0 / fps) {
+                print_field(epoch);
+                prev = now;
+            }
+        }
 
         for (auto& [pos, mob] : field) {
             // cout << "AA: " << pos.first << ", " << pos.second << endl;

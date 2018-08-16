@@ -4,7 +4,7 @@
 exec_name="main"
 
 # Level of optimization, ignored when environment variable 'DEBUG' is set to 'yes'
-optimization_level=2
+optimization_level=3
 
 # Compilers
 # Default values

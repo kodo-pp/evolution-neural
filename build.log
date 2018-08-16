@@ -1,2 +1,3 @@
-c++ -std=gnu++17 -Wall -Wextra -pedantic -Iinclude -g -Og -D_PROJECT_VERSION="1.0_dev" -c -o src/main.o src/main.cpp
-c++ src/main.o -lpthread -o main
+g++ -std=gnu++17 -Wall -Wextra -pedantic -Iinclude -O3 -ftree-vectorize -funroll-loops -flto -D_PROJECT_VERSION="1.0_dev" -c -o src/main.o src/main.cpp
+g++ src/main.o -lpthread -O3 -flto -o main
+strip --strip-all main
